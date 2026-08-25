@@ -1,8 +1,8 @@
 [project]
 name = "spec-tool"
 version = "0.1.0"
-description = "Parser, Validator und View-Generator für strukturierte Spezifikationsdokumente"
-requires-python = ">=3.10"
+description = "Parser, Validator und View-Generator für MYRMEX-Spezifikationsdokumente"
+requires-python = ">=3.9"
 dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
@@ -20,8 +20,11 @@ dev = [
 spec-tool = "spec_tool.cli:main"
 
 [build-system]
-requires = ["setuptools>=68.0"]
-build-backend = "setuptools.backends._legacy:_Backend"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
