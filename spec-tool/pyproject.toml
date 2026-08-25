@@ -1,8 +1,7 @@
 [project]
 name = "spec-tool"
 version = "0.1.0"
-description = "Parser, Validator und View-Generator für MYRMEX-Spezifikationsdokumente"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
@@ -16,15 +15,17 @@ dev = [
     "pytest-cov>=4.0",
 ]
 
-[project.scripts]
-spec-tool = "spec_tool.cli:main"
-
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]          # ← WICHTIG: macht src/ importierbar OHNE Installation
+markers = [
+    "unit: Unit-Tests",
+    "integration: Integrationstests",
+    "e2e: End-to-End-Tests gegen echte Dateien",
+]
+
+[tool.coverage.run]
+source = ["src/spec_tool"]
+
+[tool.coverage.report]
+fail_under = 80

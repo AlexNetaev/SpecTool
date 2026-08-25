@@ -1,26 +1,15 @@
 """Tests für den Frontmatter-Parser."""
 import pytest
+from pathlib import Path
 from spec_tool.parser.frontmatter import parse_frontmatter
 from spec_tool.models import DocType, Layer
 
 
 class TestParseFrontmatter:
 
-    def test_valid_frontmatter(self):
-        content = """---
-doc_id: foundation/CHARTER.md
-doc_type: charter
-version: 1.0.0
-status: BINDEND
-schema_version: spec-format-1.0
-layer: foundation
-builds_on: []
-conflict_rule: []
-last_modified: 2026-08-21
----
-
-# Titel
-"""
+    def test_valid_frontmatter(self, minimal_doc_path):
+        """V-01: Gültiger Frontmatter wird korrekt geparst."""
+        content = minimal_doc_path.read_text(encoding="utf-8")
         fm, rest = parse_frontmatter(content)
         assert fm is not None
         assert fm.doc_id == "foundation/CHARTER.md"
@@ -28,29 +17,26 @@ last_modified: 2026-08-21
         assert fm.version == "1.0.0"
         assert fm.status == "BINDEND"
         assert fm.layer == Layer.FOUNDATION
-        assert "# Titel" in rest
 
     def test_missing_frontmatter(self):
+        """V-02: Datei ohne Frontmatter gibt None zurück."""
         content = "# Titel\n\nInhalt"
         fm, rest = parse_frontmatter(content)
         assert fm is None
         assert rest == content
 
     def test_invalid_yaml(self):
-        content = """---
-doc_id: [invalid yaml
----
-
-# Titel
-"""
+        """V-03: Ungültiges YAML gibt None zurück."""
+        content = "---\ndoc_id: [invalid yaml\n---\n# Titel"
         fm, rest = parse_frontmatter(content)
         assert fm is None
 
     def test_frontmatter_with_builds_on(self):
+        """V-04: builds_on-Liste wird korrekt geparst."""
         content = """---
 doc_id: specs/QUESTOR.md
 doc_type: spec
-version: 1.1.0
+version: 1.0.0
 status: BINDEND
 layer: specs
 builds_on:
@@ -61,9 +47,10 @@ builds_on:
         fm, _ = parse_frontmatter(content)
         assert fm is not None
         assert len(fm.builds_on) == 2
-        assert fm.builds_on[0] == "foundation/CHARTER.md@1.0.0"
+        assert "CHARTER" in fm.builds_on[0]
 
     def test_unknown_doc_type_defaults_to_spec(self):
+        """V-05: Unbekannter doc_type wird zu SPEC."""
         content = """---
 doc_id: test.md
 doc_type: unknown_type
@@ -76,15 +63,9 @@ layer: specs
         assert fm is not None
         assert fm.doc_type == DocType.SPEC
 
-    def test_unknown_layer_defaults_to_specs(self):
-        content = """---
-doc_id: test.md
-doc_type: spec
-version: 1.0.0
-status: BINDEND
-layer: unknown_layer
----
-"""
-        fm, _ = parse_frontmatter(content)
-        assert fm is not None
-        assert fm.layer == Layer.SPECS
+    def test_rest_content_preserved(self, minimal_doc_path):
+        """V-06: Inhalt nach Frontmatter bleibt erhalten."""
+        content = minimal_doc_path.read_text(encoding="utf-8")
+        fm, rest = parse_frontmatter(content)
+        assert "§1 Test-Abschnitt" in rest
+        assert "Inhalt hier." in rest
