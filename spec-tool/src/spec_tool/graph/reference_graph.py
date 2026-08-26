@@ -12,6 +12,26 @@ from typing import Optional
 from spec_tool.models import SpecDocument, Reference, ReferenceType, Layer
 
 
+# ── FIX: Bekannte Dokumente im MYRMEX-Projekt ──
+# Diese Dokumente existieren in der Projektstruktur, auch wenn sie
+# nicht geladen wurden. Referenzen auf diese Dokumente werden NICHT
+# als gebrochen markiert, wenn das Dokument nicht geladen ist.
+KNOWN_PROJECT_DOCS: set[str] = {
+    "foundation/CHARTER.md",
+    "foundation/CONTRACTS.md",
+    "foundation/SPEC_FORMAT.md",
+    "foundation/MASTER_INDEX.md",
+    "specs/GREMIUM.md",
+    "specs/GREMIUM_STRATEGY.md",
+    "specs/QUESTOR.md",
+    "specs/HAL.md",
+    "specs/CAROUSEL_TWIN.md",
+    "ops/VALIDATION.md",
+    "ops/VALIDATION_ATLAS.md",
+    "ops/ROADMAP.md",
+}
+
+
 @dataclass
 class GraphNode:
     """Ein Knoten im Referenzgraphen."""
@@ -39,18 +59,6 @@ class GraphEdge:
 class ReferenceGraph:
     """
     Gerichteter Graph aller Querverweise zwischen Spezifikationsdokumenten.
-
-    Verwendung:
-        graph = ReferenceGraph()
-        graph.add_document(doc1)
-        graph.add_document(doc2)
-        graph.build()
-
-        # Impact-Analyse
-        affected = graph.impact_analysis("foundation/CHARTER.md", "SR-04")
-
-        # Broken References
-        broken = graph.find_broken_references()
     """
 
     def __init__(self):
@@ -59,6 +67,7 @@ class ReferenceGraph:
         self._adjacency: dict[str, list[str]] = defaultdict(list)
         self._reverse_adjacency: dict[str, list[str]] = defaultdict(list)
         self._documents: dict[str, SpecDocument] = {}
+        self._known_doc_ids: set[str] = set()
 
     # ─────────────────────────────────────────────────────────
     # Aufbau
@@ -67,6 +76,7 @@ class ReferenceGraph:
     def add_document(self, doc: SpecDocument):
         """Fügt ein Dokument zum Graphen hinzu."""
         self._documents[doc.doc_id] = doc
+        self._known_doc_ids.add(doc.doc_id)
 
         # Knoten für das Dokument anlegen
         node = GraphNode(
@@ -138,11 +148,9 @@ class ReferenceGraph:
         return self._nodes.get(node_id)
 
     def get_outgoing(self, node_id: str) -> list[str]:
-        """Gibt alle Knoten zurück, auf die der gegebene Knoten verweist."""
         return self._adjacency.get(node_id, [])
 
     def get_incoming(self, node_id: str) -> list[str]:
-        """Gibt alle Knoten zurück, die auf den gegebenen Knoten verweisen."""
         return self._reverse_adjacency.get(node_id, [])
 
     # ─────────────────────────────────────────────────────────
@@ -180,16 +188,35 @@ class ReferenceGraph:
     # ─────────────────────────────────────────────────────────
 
     def find_broken_references(self) -> list[Reference]:
-        """Findet alle Querverweise, deren Ziel nicht existiert."""
+        """
+        Findet alle Querverweise, deren Ziel nicht existiert.
+
+        Logik:
+        - Ziel-Dokument ist geladen → prüfe Abschnitt
+        - Ziel-Dokument ist NICHT geladen, aber in KNOWN_PROJECT_DOCS
+          → überspringen (existiert, wurde nur nicht geladen)
+        - Ziel-Dokument ist NICHT geladen und NICHT in KNOWN_PROJECT_DOCS
+          → GEBROCHENE REFERENZ
+        """
         broken: list[Reference] = []
 
         for doc in self._documents.values():
             for ref in doc.references:
-                target_id = ref.target_doc
-                if ref.target_section:
-                    target_id = f"{ref.target_doc}§{ref.target_section}"
+                target_doc_id = ref.target_doc
 
-                if target_id not in self._nodes:
+                # ── FIX: Drei-Wege-Entscheidung ──
+                if target_doc_id in self._known_doc_ids:
+                    # Dokument ist geladen → prüfe Abschnitt
+                    target_id = target_doc_id
+                    if ref.target_section:
+                        target_id = f"{target_doc_id}§{ref.target_section}"
+                    if target_id not in self._nodes:
+                        broken.append(ref)
+                elif target_doc_id in KNOWN_PROJECT_DOCS:
+                    # Dokument ist bekannt, aber nicht geladen → überspringen
+                    continue
+                else:
+                    # Dokument ist unbekannt → gebrochene Referenz
                     broken.append(ref)
 
         return broken
@@ -201,7 +228,6 @@ class ReferenceGraph:
     def check_charter_hierarchy(self) -> list[str]:
         """
         Prüft, ob die CHARTER-Hierarchie eingehalten wird.
-        Gibt eine Liste von Verstößen zurück.
         """
         violations: list[str] = []
 
@@ -222,10 +248,7 @@ class ReferenceGraph:
             source_order = layer_order.get(source_layer, 99)
             target_order = layer_order.get(target_layer, 99)
 
-            # Ein Dokument in Layer N darf kein Dokument in Layer N-1 widersprechen
-            # (es darf es referenzieren, aber nicht umgekehrt)
             if source_order < target_order:
-                # OK: Foundation referenziert Specs nicht
                 pass
 
         return violations

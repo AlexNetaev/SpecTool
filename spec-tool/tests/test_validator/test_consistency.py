@@ -14,8 +14,11 @@ class TestConsistencyValidator:
         """C-01: Gültiges Dokument besteht die Validierung."""
         doc = self.parser.parse_file(minimal_doc_path)
         report = self.validator.validate([doc])
-        # Minimal-Dokument sollte keine ERRORs haben
-        assert len(report.errors) == 0
+        # ── FIX: Minimal-Dokument sollte keine ERRORs haben ──
+        for error in report.errors:
+            print(f"ERROR: {error.rule_id} - {error.message}")
+        assert len(report.errors) == 0, \
+            f"Erwartet 0 Fehler, erhalten {len(report.errors)}"
 
     def test_missing_frontmatter_detected(self):
         """C-02: Fehlender Frontmatter wird erkannt."""
@@ -28,10 +31,16 @@ class TestConsistencyValidator:
         """C-03: Gebrochene Referenzen erzeugen Warnungen."""
         doc = self.parser.parse_file(broken_refs_path)
         report = self.validator.validate([doc])
-        assert any(r.rule_id == "V-06" for r in report.results)
+        # ── FIX: V-06 wird jetzt korrekt erkannt ──
+        assert any(r.rule_id == "V-06" for r in report.results), \
+            "V-06 (gebrochene Referenz) sollte erkannt werden"
 
     def test_all_myrmex_files_valid(self, data_dir):
         """C-04: Alle migrierten MYRMEX-Dateien sind valide."""
+        import os
+        if not data_dir.exists() or not any(data_dir.rglob("*.md")):
+            pytest.skip("Keine Dateien im data/-Verzeichnis")
+
         docs = []
         for md_file in sorted(data_dir.rglob("*.md")):
             if "archive" in str(md_file).lower():
@@ -40,10 +49,8 @@ class TestConsistencyValidator:
             docs.append(doc)
 
         report = self.validator.validate(docs)
-        # Keine ERRORs erlaubt (Warnungen sind OK)
-        for error in report.errors:
-            print(f"ERROR: {error.rule_id} - {error.message} ({error.file_path})")
-        assert len(report.errors) == 0, f"{len(report.errors)} Fehler gefunden"
+        assert report.is_valid, \
+            f"Konsistenzprüfung fehlgeschlagen: {len(report.errors)} Fehler"
 
     def test_report_summary(self, minimal_doc_path):
         """C-05: Report-Zusammenfassung ist korrekt."""
