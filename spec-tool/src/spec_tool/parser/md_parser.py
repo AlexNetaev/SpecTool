@@ -428,18 +428,16 @@ class MarkdownParser:
     # ─────────────────────────────────────────────────────────
 
     def _parse_references(
-        self,
-        body: str,
-        source_doc: str,
-        markers: list[Marker] = None,
+            self,
+            body: str,
+            source_doc: str,
+            markers: list[Marker] = None,
     ) -> list[Reference]:
-        """
-        Parst alle Querverweise aus dem Inhalt UND aus @ref-Markern.
-        """
+        """Parst alle Querverweise aus dem Inhalt UND aus @ref-Markern."""
         references: list[Reference] = []
         lines = body.split("\n")
 
-        # ── FIX: @ref-Marker als Referenzen behandeln ──
+        # ── @ref-Marker als Referenzen behandeln ──
         if markers:
             for m in markers:
                 if m.marker_type == MarkerType.REF:

@@ -60,7 +60,7 @@ class MarkerType(str, Enum):
     ROLE = "role"
     ROLE_REF = "role-ref"
     CONTRACT = "contract"
-    STATE_MACHINE = "state_machine"
+    STATE_MACHINE = "state-machine"
     DATAFLOW = "dataflow"
     DATAFLOW_STEP = "dataflow-step"
     SAFETY_RULE = "safety-rule"

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Optional, List
+from datetime import datetime
 
 from spec_tool.models import (
     SpecDocument,
@@ -185,3 +186,80 @@ class ViewGenerator:
                                     ))
 
         return entries
+
+    def render_role_views_markdown(self, role_views: list) -> str:
+        """Rendert Rollen-Views als Markdown."""
+        lines = ["# 📋 Rollen-Views\n"]
+        lines.append(f"Generiert: {datetime.now().isoformat()}\n")
+        lines.append(f"Anzahl Rollen: {len(role_views)}\n\n")
+
+        for role in role_views:
+            lines.append(f"## {role.role_id}\n\n")
+            lines.append(f"**Schicht:** {role.layer or '?'}\n")
+            lines.append(f"**LLM:** {'Ja' if role.uses_llm else 'Nein'}\n\n")
+
+            if role.inputs:
+                lines.append("### Eingänge\n")
+                for inp in role.inputs:
+                    lines.append(f"- {inp}\n")
+                lines.append("\n")
+
+            if role.outputs:
+                lines.append("### Ausgänge\n")
+                for out in role.outputs:
+                    lines.append(f"- {out}\n")
+                lines.append("\n")
+
+            if role.rules:
+                lines.append("### Regeln\n")
+                for rule in role.rules:
+                    lines.append(f"- {rule}\n")
+                lines.append("\n")
+
+            lines.append("---\n\n")
+
+        return "".join(lines)
+
+
+    def render_dataflow_views_markdown(self, df_views: list) -> str:
+        """Rendert Datenfluss-Views als Markdown."""
+        lines = ["# 🔄 Datenfluss-Views\n"]
+        lines.append(f"Generiert: {datetime.now().isoformat()}\n")
+        lines.append(f"Anzahl Datenflüsse: {len(df_views)}\n\n")
+
+        for df in df_views:
+            lines.append(f"## {df.dataflow_id}\n\n")
+            if df.trigger:
+                lines.append(f"**Trigger:** {df.trigger}\n\n")
+
+            if df.steps:
+                lines.append("### Schritte\n")
+                for i, step in enumerate(df.steps, 1):
+                    lines.append(f"{i}. {step}\n")
+                lines.append("\n")
+
+            lines.append("---\n\n")
+
+        return "".join(lines)
+
+
+    def render_test_matrix_markdown(self, test_entries: list) -> str:
+        """Rendert Test-Matrix als Markdown."""
+        lines = ["# 🧪 Test-Matrix\n"]
+        lines.append(f"Generiert: {datetime.now().isoformat()}\n")
+        lines.append(f"Anzahl Test-Einträge: {len(test_entries)}\n\n")
+
+        if not test_entries:
+            lines.append("Keine Test-Einträge gefunden.\n")
+            return "".join(lines)
+
+        lines.append("| Test-ID | Typ | Beschreibung |\n")
+        lines.append("|---------|-----|--------------|\n")
+
+        for entry in test_entries:
+            test_id = entry.get('test_id', 'N/A')
+            test_type = entry.get('type', 'N/A')
+            description = entry.get('description', 'N/A')
+            lines.append(f"| {test_id} | {test_type} | {description} |\n")
+
+        return "".join(lines)

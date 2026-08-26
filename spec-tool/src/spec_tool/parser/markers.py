@@ -1,13 +1,6 @@
 """
-Parser für HTML-Kommentar-Marker in Spezifikationsdateien.
-Erkennt Marker wie:
-  <!-- @section id="3.2" title="Kartograph" type="role-definition" role="kartograph" -->
-  <!-- @table schema="test_cases" suite="ATLAS-CTR" -->
-  <!-- @ref target="CHARTER §SR-04" type="security-rule" -->
-  <!-- @role id="kartograph" layer="4" llm="false" -->
-  <!-- @dataflow id="twin_drift" trigger="TWIN_DIVERGENCE" -->
-  <!-- @dataflow-step order="1" -->
-  <!-- @safety-rule id="SR-04" category="grundregel" -->
+Parser für SPEC_FORMAT Marker (HTML-Kommentare).
+Erkennt und parst alle Marker-Typen aus Markdown-Dateien.
 """
 from __future__ import annotations
 
@@ -17,110 +10,210 @@ from typing import Any
 from spec_tool.models import Marker, MarkerType
 
 
-# Regex für HTML-Kommentar-Marker
+# ─────────────────────────────────────────────────────────────
+# Regex-Patterns für verschiedene Marker-Typen
+# ─────────────────────────────────────────────────────────────
+
+# Generischer Pattern für alle Marker
 MARKER_PATTERN = re.compile(
-    r"<!--\s*@([\w-]+)\s+(.*?)-->",
-    re.DOTALL,
+    r"<!--\s*@([\w-]+)(.*?)-->",
+    re.DOTALL
 )
 
-# Regex für Attribut-Paare: key="value" oder key='value'
-ATTR_PATTERN = re.compile(
-    r"""([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')""",
+# Spezifische Patterns für komplexere Marker
+ROLE_MARKER_PATTERN = re.compile(
+    r"<!--\s*@role\s+([^>]*?)\s*-->",
+    re.DOTALL
 )
 
-# Mapping von Marker-Namen zu MarkerType
-MARKER_TYPE_MAP: dict[str, MarkerType] = {
-    "section": MarkerType.SECTION,
-    "table": MarkerType.TABLE,
-    "ref": MarkerType.REF,
-    "role": MarkerType.ROLE,
-    "role-ref": MarkerType.ROLE_REF,
-    "contract": MarkerType.CONTRACT,
-    "state_machine": MarkerType.STATE_MACHINE,
-    "state-machine": MarkerType.STATE_MACHINE,
-    "dataflow": MarkerType.DATAFLOW,
-    "dataflow-step": MarkerType.DATAFLOW_STEP,
-    "safety-rule": MarkerType.SAFETY_RULE,
-    "test": MarkerType.TEST,
-}
+DATAFLOW_MARKER_PATTERN = re.compile(
+    r"<!--\s*@dataflow\s+([^>]*?)\s*-->",
+    re.DOTALL
+)
+
+DATAFLOW_STEP_PATTERN = re.compile(
+    r"<!--\s*@dataflow-step\s+([^>]*?)\s*-->",
+    re.DOTALL
+)
+
+# Pattern für Attribute (key="value" oder key='value')
+ATTRIBUTE_PATTERN = re.compile(
+    r'(\w+)=["\']([^"\']*?)["\']'
+)
 
 
 def parse_markers(content: str) -> list[Marker]:
     """
-    Extrahiert alle HTML-Kommentar-Marker aus dem Inhalt.
+    Parst alle Marker aus dem Inhalt.
+
+    Args:
+        content: Der Markdown-Inhalt mit Markern
 
     Returns:
-        Liste von Marker-Objekten, sortiert nach Zeilennummer.
+        Liste von Marker-Objekten
     """
-    markers = []
-    lines = content.split("\n")
+    markers: list[Marker] = []
 
-    for line_num, line in enumerate(lines, start=1):
-        for match in MARKER_PATTERN.finditer(line):
-            marker_name = match.group(1)
-            attrs_str = match.group(2)
+    # Windows-Zeilenenden normalisieren
+    content = content.replace("\r\n", "\n").replace("\r", "\n")
 
-            marker_type = MARKER_TYPE_MAP.get(marker_name)
-            if marker_type is None:
-                continue
+    for match in MARKER_PATTERN.finditer(content):
+        marker_type_str = match.group(1)
+        attrs_str = match.group(2).strip()
 
-            attributes = _parse_attributes(attrs_str)
+        # Zeilennummer berechnen
+        line_num = content[:match.start()].count('\n') + 1
 
-            markers.append(Marker(
+        # Marker-Typ bestimmen
+        try:
+            marker_type = MarkerType(marker_type_str)
+        except ValueError:
+            # Unbekannter Marker-Typ wird ignoriert
+            continue
+
+        # Attribute parsen
+        attributes = _parse_attributes(attrs_str)
+
+        markers.append(
+            Marker(
                 marker_type=marker_type,
-                attributes=attributes,
+                raw=match.group(0),
                 line_number=line_num,
-                raw=match.group(0).strip(),
-            ))
+                attributes=attributes,
+            )
+        )
 
     return markers
 
 
 def parse_markers_multiline(content: str) -> list[Marker]:
     """
-    Extrahiert Marker auch über mehrere Zeilen (für mehrzeilige Kommentare).
+    Parst Marker aus mehrzeiligem Inhalt.
+    Identisch zu parse_markers, aber mit explizitem Namen für Klarheit.
+
+    Args:
+        content: Der Markdown-Inhalt mit Markern
+
+    Returns:
+        Liste von Marker-Objekten
     """
-    markers = []
+    markers: list[Marker] = []
+
+    # Windows-Zeilenenden normalisieren
+    content = content.replace("\r\n", "\n").replace("\r", "\n")
 
     for match in MARKER_PATTERN.finditer(content):
-        marker_name = match.group(1)
-        attrs_str = match.group(2)
-
-        marker_type = MARKER_TYPE_MAP.get(marker_name)
-        if marker_type is None:
-            continue
-
-        attributes = _parse_attributes(attrs_str)
+        marker_type_str = match.group(1)
+        attrs_str = match.group(2).strip()
 
         # Zeilennummer berechnen
-        line_number = content[:match.start()].count("\n") + 1
+        line_num = content[:match.start()].count('\n') + 1
 
-        markers.append(Marker(
-            marker_type=marker_type,
-            attributes=attributes,
-            line_number=line_number,
-            raw=match.group(0).strip(),
-        ))
+        # Marker-Typ bestimmen
+        try:
+            marker_type = MarkerType(marker_type_str)
+        except ValueError:
+            # Unbekannter Marker-Typ wird ignoriert
+            continue
+
+        # Attribute parsen
+        attributes = _parse_attributes(attrs_str)
+
+        # Spezielle Behandlung für bestimmte Marker-Typen
+        if marker_type == MarkerType.ROLE:
+            # llm-Attribut kann bool oder str sein
+            llm_val = attributes.get("llm")
+            if llm_val is not None:
+                if isinstance(llm_val, str):
+                    # Konvertiere "true"/"false" zu bool
+                    attributes["llm"] = llm_val.lower() == "true"
+                # Wenn es bereits bool ist, bleibt es so
+
+        markers.append(
+            Marker(
+                marker_type=marker_type,
+                raw=match.group(0),
+                line_number=line_num,
+                attributes=attributes,
+            )
+        )
 
     return markers
 
 
 def _parse_attributes(attrs_str: str) -> dict[str, Any]:
-    """Parst Attribut-Paare aus einem Marker-String."""
+    """
+    Parst Attribute aus einem Marker-String.
+
+    Args:
+        attrs_str: Der Attribut-Teil des Markers (z.B. 'id="0" title="Test"')
+
+    Returns:
+        Dictionary mit Attribut-Namen als Keys und Werten
+    """
     attributes: dict[str, Any] = {}
 
-    for match in ATTR_PATTERN.finditer(attrs_str):
+    for match in ATTRIBUTE_PATTERN.finditer(attrs_str):
         key = match.group(1)
-        value = match.group(2) if match.group(2) is not None else match.group(3)
+        value = match.group(2)
 
-        # Typ-Konvertierung
-        if value.lower() == "true":
-            attributes[key] = True
-        elif value.lower() == "false":
-            attributes[key] = False
-        elif value.isdigit():
-            attributes[key] = int(value)
+        # Spezielle Behandlung für bestimmte Attribute
+        if key == "llm":
+            # llm kann bool sein
+            attributes[key] = value.lower() == "true"
+        elif key in ["layer", "order", "line"]:
+            # Numerische Attribute
+            try:
+                attributes[key] = int(value)
+            except ValueError:
+                attributes[key] = value
         else:
             attributes[key] = value
 
     return attributes
+
+
+def get_markers_by_type(markers: list[Marker], marker_type: MarkerType) -> list[Marker]:
+    """
+    Filtert Marker nach Typ.
+
+    Args:
+        markers: Liste von Markern
+        marker_type: Der gesuchte Marker-Typ
+
+    Returns:
+        Liste von Markern des angegebenen Typs
+    """
+    return [m for m in markers if m.marker_type == marker_type]
+
+
+def find_marker_near_line(
+    markers: list[Marker],
+    line_num: int,
+    marker_type: MarkerType,
+    max_distance: int = 5,
+) -> Marker | None:
+    """
+    Findet einen Marker in der Nähe einer bestimmten Zeile.
+
+    Args:
+        markers: Liste von Markern
+        line_num: Die Ziel-Zeilennummer
+        marker_type: Der gesuchte Marker-Typ
+        max_distance: Maximale Entfernung in Zeilen
+
+    Returns:
+        Der nächste Marker oder None
+    """
+    candidates = [
+        m for m in markers
+        if m.marker_type == marker_type
+        and abs(m.line_number - line_num) <= max_distance
+    ]
+
+    if not candidates:
+        return None
+
+    # Sortiere nach Entfernung und gib den nächsten zurück
+    candidates.sort(key=lambda m: abs(m.line_number - line_num))
+    return candidates[0]
