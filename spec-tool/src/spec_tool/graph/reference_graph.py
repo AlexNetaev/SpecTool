@@ -132,6 +132,13 @@ class ReferenceGraph:
                 self._adjacency[source_id].append(target_id)
                 self._reverse_adjacency[target_id].append(source_id)
 
+                # ── FIX: Auch die Dokument-ID OHNE Abschnitt eintragen ──
+                # Damit impact_analysis("foundation/CHARTER.md") auch
+                # Referenzen auf "foundation/CHARTER.md§SR-04" findet.
+                if ref.target_section:
+                    if source_id not in self._reverse_adjacency[ref.target_doc]:
+                        self._reverse_adjacency[ref.target_doc].append(source_id)
+
     # ─────────────────────────────────────────────────────────
     # Abfragen
     # ─────────────────────────────────────────────────────────
